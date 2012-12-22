@@ -1,9 +1,9 @@
 {
     "targets":[
         {
-            "target_name":"netif",
+            "target_name":"raspberrysensor",
             "sources":[
-                "src/netif.cc"
+                "src/raspberrysensor.cc"
             ]
         }
     ]
