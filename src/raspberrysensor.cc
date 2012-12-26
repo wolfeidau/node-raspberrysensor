@@ -35,10 +35,19 @@ struct Baton {
   // This means that we'll have to dispose of it later ourselves.
   Persistent<Function> callback;
 
+  // The GPIO pin which will be read
+  int32_t pin;
+
+  // return values 
+  int32_t temp;
+  int32_t humidity;
+
   // Tracking errors that happened in the worker function. You can use any
   // variables you want. E.g. in some cases, it might be useful to report
   // an error number.
   bool error;
+
+  // an optional error message
   std::string error_message;
 
   // Custom data you can pass through.
@@ -52,8 +61,14 @@ Handle<Value> Async(const Arguments& args) {
 
   if (!args[0]->IsFunction()) {
     return ThrowException(Exception::TypeError(
-          String::New("First argument must be a callback function")));
+          String::New("First argument must be a callback function.")));
   }
+
+  if (!args[1]->IsUndefined() && !args[1]->IsNumber()) {
+    return ThrowException(Exception::TypeError(
+          String::New("Second argument must be the number of the pin to read data from.")));
+  }
+
   // There's no ToFunction(), use a Cast instead.
   Local<Function> callback = Local<Function>::Cast(args[0]);
 
@@ -63,6 +78,7 @@ Handle<Value> Async(const Arguments& args) {
   Baton* baton = new Baton();
   baton->error = false;
   baton->callback = Persistent<Function>::New(callback);
+  baton->pin = args[1]->IsUndefined() ? 4 : args[1]->NumberValue();
 
   // This creates the work request struct.
   uv_work_t *req = new uv_work_t();
@@ -87,25 +103,66 @@ void AsyncWork(uv_work_t* req) {
 
   // initialise the bcm2835, returning an error if this fails.
   if (!bcm2835_init()){
+    baton->error_message = "Unable to initialise bcm2835";
     baton->error = true;
     return;
   }
 
-
   // sensor related variables
   struct timespec t;
   struct sched_param param;
+  int pin = baton->pin;
+  int retryCount = 0;
 
-  // Host computer send start signal
-  // and keep this signal at least 1ms
+  // Set GPIO pin to output
+  bcm2835_gpio_fsel(pin, BCM2835_GPIO_FSEL_OUTP);
 
+  printf("start comms\n");
+
+  // Host starts with a HIGH
+  bcm2835_gpio_write(pin, HIGH);
+
+  // and keep this signal at least 500us
+  bcm2835_delayMicroseconds(500);
+ 
+  // Host switches to low
+  bcm2835_gpio_write(pin, LOW);
+
+  // and keep this signal at least 20us
+  bcm2835_delayMicroseconds(20);
+  
+  // set pin to be an input 
+  bcm2835_gpio_fsel(pin, BCM2835_GPIO_FSEL_INPT);
+
+  printf("host pullup\n");
+
+  // Host pull up voltage and wait sensor's response 
+  bcm2835_gpio_set_pud(pin, BCM2835_GPIO_PUD_UP);
+
+  // And a low detect enable
+  bcm2835_gpio_len(pin);
+
+  retryCount = 0;
+
+  do {
+    if (retryCount > 25){
+      baton->error_message = "No response from sensor";
+      baton->error = true;
+      return;
+    }
+  } while (!bcm2835_gpio_eds(pin));
+
+  // clear the data event
+  bcm2835_gpio_set_eds(pin);
+  printf("low event detect for pin %d\n", pin);
+ 
+  printf("data start\n");
+ 
   // Sensor pull up bus's voltage 
 
+
   // Do work in threadpool here.
-  baton->result = 42;
-
-
-
+  baton->result = pin;
 
   // If the work we do fails, set baton->error_message to the error string
   // and baton->error to true.
