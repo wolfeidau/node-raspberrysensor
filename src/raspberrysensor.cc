@@ -22,6 +22,13 @@
 
 using namespace v8;
 
+static inline int timespec_cmp (struct timespec a, struct timespec b)
+{
+  return (a.tv_sec < b.tv_sec ? -1
+    : a.tv_sec > b.tv_sec ? 1
+    : a.tv_nsec - b.tv_nsec);
+}
+
 // Forward declaration. Usually, you do this in a header file.
 Handle<Value> Async(const Arguments& args);
 void AsyncWork(uv_work_t* req);
@@ -42,6 +49,13 @@ struct Baton {
   int32_t temp;
   int32_t humidity;
 
+  // time taken
+  int32_t time_taken;
+
+  // time stamps
+  struct timespec t_before;
+  struct timespec t_after;
+ 
   // Tracking errors that happened in the worker function. You can use any
   // variables you want. E.g. in some cases, it might be useful to report
   // an error number.
@@ -108,61 +122,28 @@ void AsyncWork(uv_work_t* req) {
     return;
   }
 
-  // sensor related variables
-  struct timespec t;
   struct sched_param param;
-  int pin = baton->pin;
   int retryCount = 0;
 
-  // Set GPIO pin to output
-  bcm2835_gpio_fsel(pin, BCM2835_GPIO_FSEL_OUTP);
-
-  printf("start comms\n");
-
-  // Host starts with a HIGH
-  bcm2835_gpio_write(pin, HIGH);
-
-  // and keep this signal at least 500us
-  bcm2835_delayMicroseconds(500);
- 
-  // Host switches to low
-  bcm2835_gpio_write(pin, LOW);
-
-  // and keep this signal at least 20us
-  bcm2835_delayMicroseconds(20);
-  
-  // set pin to be an input 
-  bcm2835_gpio_fsel(pin, BCM2835_GPIO_FSEL_INPT);
-
-  printf("host pullup\n");
-
-  // Host pull up voltage and wait sensor's response 
-  bcm2835_gpio_set_pud(pin, BCM2835_GPIO_PUD_UP);
-
-  // And a low detect enable
-  bcm2835_gpio_len(pin);
-
-  retryCount = 0;
+  clock_gettime(0, &baton->t_before);
 
   do {
-    if (retryCount > 25){
-      baton->error_message = "No response from sensor";
-      baton->error = true;
-      return;
-    }
-  } while (!bcm2835_gpio_eds(pin));
 
-  // clear the data event
-  bcm2835_gpio_set_eds(pin);
-  printf("low event detect for pin %d\n", pin);
- 
-  printf("data start\n");
- 
-  // Sensor pull up bus's voltage 
+    if(retryCount > 100){
+      clock_gettime(0, &baton->t_after);
+      baton->result = timespec_cmp(baton->t_after, baton->t_before);
+      return; 
+    }
+    
+    bcm2835_delayMicroseconds(10);
+
+    retryCount++;
+
+  } while (1);
 
 
   // Do work in threadpool here.
-  baton->result = pin;
+  baton->result = baton->pin;
 
   // If the work we do fails, set baton->error_message to the error string
   // and baton->error to true.
