@@ -15,7 +15,7 @@
 #include <sys/io.h>
 #include <bcm2835.h>
 
-#define NSEC_PER_SEC    1000000000
+#define DHT22_DATA_BIT_COUNT 41
 
 #include <node.h>
 #include <string>
@@ -122,10 +122,141 @@ void AsyncWork(uv_work_t* req) {
     return;
   }
 
-  struct sched_param param;
-  int retryCount = 0;
+//  struct sched_param param;
+  uint8_t retryCount;
+  uint8_t bitTimes[DHT22_DATA_BIT_COUNT];
+  int i;
 
+  int currentTemperature;
+  int currentHumidity;
+  
+  // configure the pin for output
+  bcm2835_gpio_fsel(baton->pin, BCM2835_GPIO_FSEL_OUTP);
+
+  // Pin needs to start HIGH, wait until it is HIGH with a timeout
+  retryCount = 0;
+
+  do {
+    if (retryCount > 125) {
+      baton->error_message = "DHT bus timeout"; 
+      baton->error = true;
+      return;
+    }
+    bcm2835_delayMicroseconds(2);
+    retryCount++;
+  } while (bcm2835_gpio_lev(baton->pin) == HIGH); // should be high
+
+  // set the pin low 
+  bcm2835_gpio_write(baton->pin, LOW);
+
+  // hold it for 1ms
+  bcm2835_delay(1);
+
+  // configure the pin for output
+  bcm2835_gpio_fsel(baton->pin, BCM2835_GPIO_FSEL_INPT);
+
+  // Find the start of the ACK Pulse
+  retryCount = 0;
+  
+  do {
+    if(retryCount > 25) { //(Spec is 20 to 40 us, 25*2 == 50 us)
+      baton->error_message = "DHT not present."; 
+      baton->error = true;
+      return;
+    } 
+    bcm2835_delayMicroseconds(2);
+    retryCount++;
+  } while (bcm2835_gpio_lev(baton->pin) == LOW); 
+ 
+  // Find the end of the ACK Pulse
+  retryCount = 0;
+
+  do {
+    if (retryCount > 50) { //(Spec is 80 us, 50*2 == 100 us)
+      baton->error_message = "DHT not present."; 
+      baton->error = true;
+      return;
+    }
+    bcm2835_delayMicroseconds(2);
+    retryCount++;
+  } while (bcm2835_gpio_lev(baton->pin) == HIGH); 
+
+  // Read the 40 bit data stream
+  for(i = 0; i < DHT22_DATA_BIT_COUNT; i++) {
+
+    // Find the start of the sync pulse
+    retryCount = 0;
+    do {
+      if (retryCount > 35) { //(Spec is 50 us, 35*2 == 70 us)
+        baton->error_message = "DHT sync error."; 
+        baton->error = true;
+        return;
+      }
+      bcm2835_delayMicroseconds(2);
+      retryCount++;
+    } while (bcm2835_gpio_lev(baton->pin) == LOW);
+    
+    // Measure the width of the data pulse
+    retryCount = 0;
+    do {
+      if (retryCount > 50) { //(Spec is 80 us, 50*2 == 100 us)
+        baton->error_message = "DHT data timeout error."; 
+        baton->error = true;
+        return;
+      }
+      bcm2835_delayMicroseconds(2);
+      retryCount++;
+    } while (bcm2835_gpio_lev(baton->pin) == HIGH);
+
+    // assign the bit value
+    bitTimes[i] = retryCount;
+  }
+
+  // DEBUG
+  printf("values: ");
+  for(i = 0; i < DHT22_DATA_BIT_COUNT; i++) {
+    printf("%d ", bitTimes[i]);     
+  }
+  printf("\n");
+  // DEBUG
+
+  // Spec: 0 is 26 to 28 us
+  // Spec: 1 is 70 us
+  // bitTimes[x] <= 11 is a 0
+  // bitTimes[x] >  11 is a 1 
+
+  // read humidity  
+  currentHumidity = 0;
+  for(i = 0; i < 16; i++) {
+    if(bitTimes[i + 1] > 11) {
+      currentHumidity |= (1 << (15 - i));
+    }  
+  }
+
+  baton->humidity = currentHumidity & 0x7FFF;
+
+  // DEBUG
+  printf("currentHumidity = %d\n", baton->humidity);
+  // DEBUG
+
+  // read the temperature
+  currentTemperature = 0;
+  for(i = 0; i < 16; i++) {
+    if(bitTimes[i + 17] > 11){
+      currentTemperature |= (1 << (15 - i));
+    }
+  }
+
+  baton->temp = currentTemperature & 0x7FFF;
+
+  // DEBUG
+  printf("currentTemperature = %d\n", baton->temp);
+  // DEBUG
+
+/*
   clock_gettime(0, &baton->t_before);
+
+  retryCount = 0;
 
   do {
 
@@ -136,12 +267,10 @@ void AsyncWork(uv_work_t* req) {
     }
     
     bcm2835_delayMicroseconds(10);
-
     retryCount++;
 
   } while (1);
-
-
+*/
   // Do work in threadpool here.
   baton->result = baton->pin;
 
