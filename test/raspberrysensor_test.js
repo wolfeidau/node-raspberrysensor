@@ -5,7 +5,7 @@ var raspberrysensor = require('../lib/raspberrysensor.js'),
 
 describe('raspberrysensor', function () {
     it('should succeed', function (done) {
-      raspberrysensor.async(function(err, result){
+      raspberrysensor.humidity(function(err, result){
         should.not.exist(err);
         console.log(JSON.stringify(result));
         done();

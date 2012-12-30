@@ -39,9 +39,9 @@ static inline int timespec_cmp (struct timespec a, struct timespec b)
 }
 
 // Forward declaration. Usually, you do this in a header file.
-Handle<Value> Async(const Arguments& args);
-void AsyncWork(uv_work_t* req);
-void AsyncAfter(uv_work_t* req);
+Handle<Value> Humidity(const Arguments& args);
+void HumidityWork(uv_work_t* req);
+void HumidityAfter(uv_work_t* req);
 
 // We use a struct to store information about the asynchronous "work request".
 struct Baton {
@@ -81,7 +81,7 @@ struct Baton {
 
 // This is the function called directly from JavaScript land. It creates a
 // work request object and schedules it for execution.
-Handle<Value> Async(const Arguments& args) {
+Handle<Value> Humidity(const Arguments& args) {
   HandleScope scope;
 
   if (!args[0]->IsFunction()) {
@@ -112,7 +112,7 @@ Handle<Value> Async(const Arguments& args) {
   // Schedule our work request with libuv. Here you can specify the functions
   // that should be executed in the threadpool and back in the main thread
   // after the threadpool function completed.
-  int status = uv_queue_work(uv_default_loop(), req, AsyncWork, AsyncAfter);
+  int status = uv_queue_work(uv_default_loop(), req, HumidityWork, HumidityAfter);
   assert(status == 0);
 
   return Undefined();
@@ -123,7 +123,7 @@ Handle<Value> Async(const Arguments& args) {
 // will crash randomly and you'll have a lot of fun debugging.
 // If you want to use parameters passed into the original call, you have to
 // convert them to PODs or some other fancy method.
-void AsyncWork(uv_work_t* req) {
+void HumidityWork(uv_work_t* req) {
   Baton* baton = static_cast<Baton*>(req->data);
 
   // initialise the bcm2835, returning an error if this fails.
@@ -350,7 +350,7 @@ void AsyncWork(uv_work_t* req) {
 
 // This function is executed in the main V8/JavaScript thread. That means it's
 // safe to use V8 functions again. Don't forget the HandleScope!
-void AsyncAfter(uv_work_t* req) {
+void HumidityAfter(uv_work_t* req) {
   HandleScope scope;
   Baton* baton = static_cast<Baton*>(req->data);
 
@@ -415,8 +415,8 @@ void AsyncAfter(uv_work_t* req) {
 }
 
 void RegisterModule(Handle<Object> target) {
-  target->Set(String::NewSymbol("async"),
-      FunctionTemplate::New(Async)->GetFunction());
+  target->Set(String::NewSymbol("humidity"),
+      FunctionTemplate::New(Humidity)->GetFunction());
 }
 
 NODE_MODULE(raspberrysensor, RegisterModule);

@@ -3,7 +3,7 @@
         {
             "target_name":"raspberrysensor",
             "sources":[
-                "src/raspberrysensor.cc"
+                "src/raspberrysensor_humidity.cc"
             ],
             "libraries": [
               "-lrt",
