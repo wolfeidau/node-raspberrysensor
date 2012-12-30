@@ -7,7 +7,7 @@ describe('raspberrysensor', function () {
     it('should succeed', function (done) {
       raspberrysensor.async(function(err, result){
         should.not.exist(err);
-        console.log(result);
+        console.log(JSON.stringify(result));
         done();
       });
     });

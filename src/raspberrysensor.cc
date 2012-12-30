@@ -15,7 +15,8 @@
 #include <sys/io.h>
 #include <bcm2835.h>
 
-#define DHT22_DATA_BIT_COUNT 41
+#define DHT22_DATA_BIT_COUNT 40
+//#define DEBUG 1
 
 #include <node.h>
 #include <string>
@@ -46,8 +47,10 @@ struct Baton {
   int32_t pin;
 
   // return values 
-  int32_t temp;
-  int32_t humidity;
+  int32_t humidity_integral;
+  int32_t humidity_decimal;
+  int32_t temperature_integral;
+  int32_t temperature_decimal;
 
   // time taken
   int32_t time_taken;
@@ -122,13 +125,22 @@ void AsyncWork(uv_work_t* req) {
     return;
   }
 
-//  struct sched_param param;
   uint8_t retryCount;
-  uint8_t bitTimes[DHT22_DATA_BIT_COUNT];
   int i;
 
-  int currentTemperature;
-  int currentHumidity;
+  #ifdef DEBUG
+  uint8_t bitTimes[DHT22_DATA_BIT_COUNT];
+  int32_t syncTimes[DHT22_DATA_BIT_COUNT];
+  int32_t sampleTimes[DHT22_DATA_BIT_COUNT];
+  int32_t ackTransition;
+  int32_t ackComplete;
+  #endif
+
+  int rawTemperature = 0;
+  int rawHumidity = 0;
+  uint8_t checkSum = 0;
+
+  uint8_t csPart1, csPart2, csPart3, csPart4;
   
   // configure the pin for output
   bcm2835_gpio_fsel(baton->pin, BCM2835_GPIO_FSEL_OUTP);
@@ -150,7 +162,7 @@ void AsyncWork(uv_work_t* req) {
   bcm2835_gpio_write(baton->pin, LOW);
 
   // hold it for 1ms
-  bcm2835_delay(1);
+  bcm2835_delayMicroseconds(1100);
 
   // configure the pin for output
   bcm2835_gpio_fsel(baton->pin, BCM2835_GPIO_FSEL_INPT);
@@ -166,14 +178,34 @@ void AsyncWork(uv_work_t* req) {
     } 
     bcm2835_delayMicroseconds(2);
     retryCount++;
-  } while (bcm2835_gpio_lev(baton->pin) == LOW); 
+  } while (bcm2835_gpio_lev(baton->pin) == HIGH); 
  
   // Find the end of the ACK Pulse
   retryCount = 0;
 
+  clock_gettime(0, &baton->t_before);
+
   do {
     if (retryCount > 50) { //(Spec is 80 us, 50*2 == 100 us)
-      baton->error_message = "DHT not present."; 
+      baton->error_message = "DHT ack to long."; 
+      baton->error = true;
+      return;
+    }
+    bcm2835_delayMicroseconds(2);
+    retryCount++;
+  } while (bcm2835_gpio_lev(baton->pin) == LOW); 
+
+  clock_gettime(0, &baton->t_after);
+
+  #ifdef DEBUG
+  ackTransition = timespec_cmp(baton->t_after, baton->t_before);
+  #endif
+
+  clock_gettime(0, &baton->t_before);
+
+  do {
+    if (retryCount > 50) { //(Spec is 80 us, 50*2 == 100 us)
+      baton->error_message = "DHT ack to long."; 
       baton->error = true;
       return;
     }
@@ -181,8 +213,18 @@ void AsyncWork(uv_work_t* req) {
     retryCount++;
   } while (bcm2835_gpio_lev(baton->pin) == HIGH); 
 
+  clock_gettime(0, &baton->t_after);
+
+  #ifdef DEBUG
+  ackComplete = timespec_cmp(baton->t_after, baton->t_before);
+  #endif
+
+  // Here sensor pulled down to start transmitting bits.
+
   // Read the 40 bit data stream
   for(i = 0; i < DHT22_DATA_BIT_COUNT; i++) {
+
+    clock_gettime(0, &baton->t_before);
 
     // Find the start of the sync pulse
     retryCount = 0;
@@ -196,6 +238,13 @@ void AsyncWork(uv_work_t* req) {
       retryCount++;
     } while (bcm2835_gpio_lev(baton->pin) == LOW);
     
+    #ifdef DEBUG
+    clock_gettime(0, &baton->t_after);
+    syncTimes[i] = timespec_cmp(baton->t_after, baton->t_before);
+    #endif
+
+    clock_gettime(0, &baton->t_before);
+
     // Measure the width of the data pulse
     retryCount = 0;
     do {
@@ -208,74 +257,87 @@ void AsyncWork(uv_work_t* req) {
       retryCount++;
     } while (bcm2835_gpio_lev(baton->pin) == HIGH);
 
-    // assign the bit value
+    clock_gettime(0, &baton->t_after);
+
+    // Identification of bit values.
+    if (retryCount > 20) {
+      if (i < 16) { // Humidity
+        rawHumidity |= (1 << (15 - i));
+      } 
+      if ((i > 15) && (i < 32)) { // Temperature
+        rawTemperature |= (1 << (31 - i));
+      }
+      if ((i > 31) && (i < 40)) { // CRC data
+        checkSum |= (1 << (39 - i));
+      }
+    }
+
+    #ifdef DEBUG
     bitTimes[i] = retryCount;
+    sampleTimes[i] = timespec_cmp(baton->t_after, baton->t_before);
+    #endif
   }
 
-  // DEBUG
-  printf("values: ");
+  #ifdef DEBUG
+  printf("bitLoops: ");
   for(i = 0; i < DHT22_DATA_BIT_COUNT; i++) {
     printf("%d ", bitTimes[i]);     
   }
   printf("\n");
-  // DEBUG
 
-  // Spec: 0 is 26 to 28 us
-  // Spec: 1 is 70 us
-  // bitTimes[x] <= 11 is a 0
-  // bitTimes[x] >  11 is a 1 
+  printf("bitTimes: ");
+  for(i = 0; i < DHT22_DATA_BIT_COUNT; i++) {
+    printf("%d ", sampleTimes[i]);     
+  }
+  printf("\n");
 
-  // read humidity  
-  currentHumidity = 0;
-  for(i = 0; i < 16; i++) {
-    if(bitTimes[i + 1] > 11) {
-      currentHumidity |= (1 << (15 - i));
-    }  
+  printf("syncTimes: ");
+  for(i = 0; i < DHT22_DATA_BIT_COUNT; i++) {
+    printf("%d ", syncTimes[i]);     
+  }
+  printf("\n");
+
+  printf("Ack Pulse = %d\n", ackTransition);
+  printf("Ack Pulse complete = %d\n", ackComplete);
+
+  printf("Raw Humidity = %d\n", rawHumidity);
+  printf("Raw Temperature = %d\n", rawTemperature);
+  printf("Checksum = %d\n", checkSum);
+  #endif
+
+  // calculate checksum
+  csPart1 = rawHumidity >> 8;
+  csPart2 = rawHumidity & 0xFF;
+  csPart3 = rawTemperature >> 8;
+  csPart4 = rawTemperature & 0xFF;
+
+  #ifdef DEBUG
+  printf("Calculated CheckSum = %d\n", ( (csPart1 + csPart2 + csPart3 + csPart4) & 0xFF ));
+  #endif
+
+  if (checkSum != ( (csPart1 + csPart2 + csPart3 + csPart4) & 0xFF ) ) {
+    baton->error_message = "DHT checksum error."; 
+    baton->error = true;
+    return;
   }
 
-  baton->humidity = currentHumidity & 0x7FFF;
+  // raw data to sensor values
+  baton->humidity_integral = (uint8_t)(rawHumidity / 10);
+  baton->humidity_decimal = (uint8_t)(rawHumidity % 10);
 
-  // DEBUG
-  printf("currentHumidity = %d\n", baton->humidity);
-  // DEBUG
-
-  // read the temperature
-  currentTemperature = 0;
-  for(i = 0; i < 16; i++) {
-    if(bitTimes[i + 17] > 11){
-      currentTemperature |= (1 << (15 - i));
-    }
+  // Check if temperature is below zero, non standard way of encoding negative numbers!
+  if(rawTemperature & 0x8000) { 
+    // Remove signal bit
+    rawTemperature &= 0x7FFF; 
+    baton->temperature_integral = (int8_t)(rawTemperature / 10) * -1;
+  } else {
+    baton->temperature_integral = (int8_t)(rawTemperature / 10);  
   }
 
-  baton->temp = currentTemperature & 0x7FFF;
+  baton->temperature_decimal = (uint8_t)(rawTemperature % 10);  
 
-  // DEBUG
-  printf("currentTemperature = %d\n", baton->temp);
-  // DEBUG
-
-/*
-  clock_gettime(0, &baton->t_before);
-
-  retryCount = 0;
-
-  do {
-
-    if(retryCount > 100){
-      clock_gettime(0, &baton->t_after);
-      baton->result = timespec_cmp(baton->t_after, baton->t_before);
-      return; 
-    }
-    
-    bcm2835_delayMicroseconds(10);
-    retryCount++;
-
-  } while (1);
-*/
-  // Do work in threadpool here.
-  baton->result = baton->pin;
-
-  // If the work we do fails, set baton->error_message to the error string
-  // and baton->error to true.
+  // set the result for the moment
+  baton->result = 0;
 }
 
 // This function is executed in the main V8/JavaScript thread. That means it's
@@ -305,10 +367,23 @@ void AsyncAfter(uv_work_t* req) {
     // first argument before the result arguments.
     // In case you produced more complex data, this is the place to convert
     // your plain C++ data structures into JavaScript/V8 data structures.
+  /*
+  int32_t humidity_integral;
+  int32_t humidity_decimal;
+  int32_t temperature_integral;
+  int32_t temperature_decimal;
+  */
+
+    Local<Object> object = Object::New();
+    object->Set(String::New("humidity_integral"), Number::New(baton->humidity_integral)); 
+    object->Set(String::New("humidity_decimal"), Number::New(baton->humidity_decimal)); 
+    object->Set(String::New("temperature_integral"), Number::New(baton->temperature_integral)); 
+    object->Set(String::New("temperature_decimal"), Number::New(baton->temperature_decimal)); 
+
     const unsigned argc = 2;
     Local<Value> argv[argc] = {
       Local<Value>::New(Null()),
-      Local<Value>::New(Integer::New(baton->result))
+      object
     };
 
     // Wrap the callback function call in a TryCatch so that we can call
