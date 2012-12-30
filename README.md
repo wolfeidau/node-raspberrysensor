@@ -27,7 +27,7 @@ cd node-0.8.16
 sudo make install
 ```
 
-Download and install the [bcm2835 libary](http://www.open.com.au/mikem/bcm2835/).
+Download and install the [bcm2835 library](http://www.open.com.au/mikem/bcm2835/).
 
 ```
 wget http://www.open.com.au/mikem/bcm2835/bcm2835-1.14.tar.gz
