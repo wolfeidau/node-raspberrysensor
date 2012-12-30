@@ -2,10 +2,18 @@
  * raspberrysensor
  * https://github.com/markw/raspberrysensor
  *
- * Access a temperature and humidity sensor using the GPIO ports on the Raspberry Pi
+ * Access an AM2302 temperature and humidity sensor using the GPIO ports on the Raspberry Pi
  *
  * Copyright (c) 2012 Mark Wolfe
  * Licensed under the MIT license.
+ *
+ * Started with information, insight and code linked in this blog post.
+ *  http://blog.ringerc.id.au/2012/01/using-rht03-aliases-rht-22.html
+ *
+ * Used bits of this code by Miguel Moreto, Brazil, 2012. 
+ *  https://code.google.com/p/moreto-nixie-clock/source/browse/trunk/FirmwareV1/DHT22.c
+ * 
+ * Pretty much rewrote it line by line while working out how the sensor and some thier code worked then tweaked it for this platform.
  */
 
 #include <stdlib.h>
