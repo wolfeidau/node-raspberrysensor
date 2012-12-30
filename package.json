@@ -2,7 +2,7 @@
     "name":"raspberrysensor",
     "description":"Library for accessing various sensors via the bcm2835 library.",
     "version":"0.1.0",
-    "homepage":"https://github.com/wolfeidau/raspberrysensor",
+    "homepage":"https://github.com/wolfeidau/node-raspberrysensor",
     "author":{
         "name":"Mark Wolfe",
         "email":"mark@wolfe.id.au",
@@ -10,15 +10,15 @@
     },
     "repository":{
         "type":"git",
-        "url":"git://github.com/wolfeidau/raspberrysensor.git"
+        "url":"git://github.com/wolfeidau/node-raspberrysensor.git"
     },
     "bugs":{
-        "url":"https://github.com/wolfeidau/raspberrysensor/issues"
+        "url":"https://github.com/wolfeidau/node-raspberrysensor/issues"
     },
     "licenses":[
         {
             "type":"MIT",
-            "url":"https://github.com/wolfeidau/raspberrysensor/blob/master/LICENSE-MIT"
+            "url":"https://github.com/wolfeidau/node-raspberrysensor/blob/master/LICENSE-MIT"
         }
     ],
     "main":"lib/raspberrysensor",
