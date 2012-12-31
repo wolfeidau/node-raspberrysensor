@@ -24,7 +24,7 @@
 #include <bcm2835.h>
 
 #define DHT22_DATA_BIT_COUNT 40
-//#define DEBUG 1
+#define DEBUG 1
 
 #include <node.h>
 #include <string>
@@ -153,20 +153,7 @@ void HumidityWork(uv_work_t* req) {
   // configure the pin for output
   bcm2835_gpio_fsel(baton->pin, BCM2835_GPIO_FSEL_OUTP);
 
-  // Pin needs to start HIGH, wait until it is HIGH with a timeout
-  retryCount = 0;
-
-  do {
-    if (retryCount > 125) {
-      baton->error_message = "DHT bus timeout"; 
-      baton->error = true;
-      return;
-    }
-    bcm2835_delayMicroseconds(2);
-    retryCount++;
-  } while (bcm2835_gpio_lev(baton->pin) == HIGH); // should be high
-
-  // set the pin low 
+ // set the pin low 
   bcm2835_gpio_write(baton->pin, LOW);
 
   // hold it for 1ms

@@ -1,7 +1,7 @@
 {
     "name":"raspberrysensor",
     "description":"Library for accessing various sensors via the bcm2835 library.",
-    "version":"0.1.1",
+    "version":"0.1.2",
     "homepage":"https://github.com/wolfeidau/node-raspberrysensor",
     "author":{
         "name":"Mark Wolfe",
