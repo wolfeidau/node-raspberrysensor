@@ -24,7 +24,7 @@
 #include <bcm2835.h>
 
 #define DHT22_DATA_BIT_COUNT 40
-#define DEBUG 1
+//#define DEBUG 0
 
 #include <node.h>
 #include <string>
