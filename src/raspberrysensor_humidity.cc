@@ -169,6 +169,7 @@ void HumidityWork(uv_work_t* req) {
     if(retryCount > 25) { //(Spec is 20 to 40 us, 25*2 == 50 us)
       baton->error_message = "DHT not present."; 
       baton->error = true;
+      bcm2835_close();
       return;
     } 
     bcm2835_delayMicroseconds(2);
@@ -184,6 +185,7 @@ void HumidityWork(uv_work_t* req) {
     if (retryCount > 50) { //(Spec is 80 us, 50*2 == 100 us)
       baton->error_message = "DHT ack to long."; 
       baton->error = true;
+      bcm2835_close();
       return;
     }
     bcm2835_delayMicroseconds(2);
@@ -202,6 +204,7 @@ void HumidityWork(uv_work_t* req) {
     if (retryCount > 50) { //(Spec is 80 us, 50*2 == 100 us)
       baton->error_message = "DHT ack to long."; 
       baton->error = true;
+      bcm2835_close();
       return;
     }
     bcm2835_delayMicroseconds(2);
@@ -227,6 +230,7 @@ void HumidityWork(uv_work_t* req) {
       if (retryCount > 35) { //(Spec is 50 us, 35*2 == 70 us)
         baton->error_message = "DHT sync error."; 
         baton->error = true;
+        bcm2835_close();
         return;
       }
       bcm2835_delayMicroseconds(2);
@@ -246,6 +250,7 @@ void HumidityWork(uv_work_t* req) {
       if (retryCount > 50) { //(Spec is 80 us, 50*2 == 100 us)
         baton->error_message = "DHT data timeout error."; 
         baton->error = true;
+        bcm2835_close();
         return;
       }
       bcm2835_delayMicroseconds(2);
@@ -313,6 +318,7 @@ void HumidityWork(uv_work_t* req) {
   if (checkSum != ( (csPart1 + csPart2 + csPart3 + csPart4) & 0xFF ) ) {
     baton->error_message = "DHT checksum error."; 
     baton->error = true;
+    bcm2835_close();
     return;
   }
 
@@ -330,6 +336,9 @@ void HumidityWork(uv_work_t* req) {
   }
 
   baton->temperature_decimal = (uint8_t)(rawTemperature % 10);  
+
+  // close the library 
+  bcm2835_close();
 
   // set the result for the moment
   baton->result = 0;
