@@ -3,7 +3,7 @@
 Library for accessing various sensors via the bcm2835 library.
 
 The first sensor which I have implemented is the [AM2302](http://cdn.shopify.com/s/files/1/0045/8932/files/DHT22.pdf?100745), to see how this is attached to the Raspberry Pi take a look
-at my blog post [Raspberry Pi Temperature and Humidity Project Construction](www.wolfe.id.au/2012/12/22/raspberry-pi-temperature-and-humidity-project-construction/)
+at my blog post [Raspberry Pi Temperature and Humidity Project Construction](http://www.wolfe.id.au/2012/12/22/raspberry-pi-temperature-and-humidity-project-construction/)
 
 Once you have your sensor assembled and attached to the Raspberry Pi you can install node and try it out.
 
