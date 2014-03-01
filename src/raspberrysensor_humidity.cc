@@ -112,7 +112,7 @@ Handle<Value> Humidity(const Arguments& args) {
   // Schedule our work request with libuv. Here you can specify the functions
   // that should be executed in the threadpool and back in the main thread
   // after the threadpool function completed.
-  int status = uv_queue_work(uv_default_loop(), req, HumidityWork, HumidityAfter);
+  int status = uv_queue_work(uv_default_loop(), req, HumidityWork, (uv_after_work_cb)HumidityAfter);
   assert(status == 0);
 
   return Undefined();
